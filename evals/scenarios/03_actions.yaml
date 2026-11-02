@@ -93,7 +93,7 @@
 - id: escalate-conduct
   category: escalation
   turns:
-  - user_says: Someone in
+  - user_says: "Someone in #general keeps insulting beginners who ask questions. Can you flag this to the mods?"
     approve: true
   expect:
     tools_called:

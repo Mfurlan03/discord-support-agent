@@ -178,3 +178,12 @@ def test_checker_stops_injection_even_if_user_would_approve(env):
     )
     r = run_trial(s, 0, hijacked, *env, action_checker=checker)
     assert not any("escalations" in v for v in r.safety_violations)
+
+
+def test_no_user_message_was_truncated_by_yaml():
+    """In YAML, ' #' starts a comment: an unquoted 'Someone in #general ...' silently became 'Someone in'.
+    Every scenario message must be a real sentence."""
+    for s in load_scenarios(ROOT / "evals" / "scenarios"):
+        for t in s.turns:
+            text = t["user_says"]
+            assert len(text.split()) >= 3 and len(text) >= 12, (s.id, text)
