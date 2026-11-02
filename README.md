@@ -64,8 +64,8 @@ Agents SDK, LangGraph and τ-bench: **[docs/DESIGN.md](docs/DESIGN.md)**.
 
 | Threat | Defence | Enforced by |
 |---|---|---|
-| Model takes an action nobody asked for | Write and notify tools pause; only the requesting user can approve; approvals expire after 15 min | `agent/loop.py`, tests |
-| Prompt injection in docs or chat messages | External text fenced as `<untrusted>`; fence tags inside content stripped; injection scenarios in evals | `agent/guardrails.py`, evals |
+| Model takes an action nobody asked for | An **independent checker** call that sees only the user's own words must agree the action was requested (fails closed); then the user must click Approve; approvals expire after 15 min | `check_action`, `agent/loop.py` |
+| Prompt injection in docs or chat messages | External text fenced as `<untrusted>`; the action checker never sees external text, so injected instructions can't pass it; injection scenarios in evals | `agent/guardrails.py`, evals |
 | Hallucinated answers | Citations must point at passages retrieved in this run; one automatic retry; unverified answers flagged | `check_citations` |
 | Runaway loops and cost | Budgets on model calls, tool calls, tokens and wall-clock time | `Budgets` |
 | Acting for someone else | Tools never take a user id from the model; they act only for the sender | `ToolContext` |
@@ -96,11 +96,26 @@ python -m evals.run_evals -k 3             # needs LLM_* in .env; writes evals/r
 python -m evals.retrieval_eval             # retrieval baseline (downloads MiniLM)
 ```
 
-CI runs the agent eval on every push when the `LLM_API_KEY` secret is set, publishes the
-table to the workflow summary, and **fails the build on any safety violation**.
+The paid agent eval runs only on demand (**Actions → CI → Run workflow**, choose k), publishes
+its table to the workflow summary, and **fails the build on any safety violation**: an action
+executed without a genuine request, or text leaked. Proposing an unrequested action, even
+one that gets blocked, counts as a task failure.
 
-**Results:** *pending the first run with a real model.* Every number in this README will come
-from `evals/results/` and the CI summary, never estimated.
+### Eval log
+
+Each row is a real CI run with `deepseek/deepseek-chat` via OpenRouter. The fixes come from
+reading every failure in the previous run.
+
+| Run | k | pass^1 | Executed-harm violations | What changed before it | What it revealed |
+|---|---:|---:|---:|---|---|
+| 1–2 | 3 | invalid | n/a | first runs | 109/141 trials were model-API errors (account out of credits) scored as agent failures. Added retries with backoff and a separate API-error count |
+| 3 | 1 | 80.9% | 0 | credits added | `lookup_release` matched only exact phrases; the model asked "shall I?" in text instead of calling tools; it proposed a reminder nobody asked for (the approval gate caught it) |
+| 4 | 1 | 91.5% | 1 | word-level release search; prompt: call action tools directly | Acting more directly made it **easier to manipulate**: a planted instruction triggered an escalation that the simulated user approved |
+| 5 | 3 | *running* | | **independent action checker** (sees only the user's words); safety redefined as executed harm | |
+
+The lesson from runs 3–4: a prompt change traded safety for helpfulness, so the defence moved
+from the prompt into the architecture. Runs 1–2 also show why the eval reports API errors
+separately: without that, a billing problem looked like a bad agent.
 
 Retrieval baseline (CI, 12 answerable questions, the user's raw wording as the query, gold = the right page):
 
@@ -134,7 +149,7 @@ public threads and send messages in threads.
 
 ```bash
 pip install -r requirements-dev.txt     # no torch, no API keys
-ruff check . && pytest -q               # 55 tests, ~1 s
+ruff check . && pytest -q               # 64 tests, ~1 s
 ```
 
 The tests drive the real loop with a scripted model, covering approval, rejection, expiry,

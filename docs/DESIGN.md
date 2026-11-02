@@ -39,6 +39,13 @@ tells the model to ignore instructions inside fences, but **the defence does not
 model obeying**: even a successful injection can only *propose* an action, and the user sees it
 before anything happens. The eval suite plants injections to measure how often the model is fooled.
 
+**5b. An independent action checker (dual-LLM pattern).** Eval run 4 showed that prompt rules
+alone don't hold: telling the model to act directly also made a planted instruction work. Now
+every write or notify proposal first goes to a separate model call that sees *only what the
+user typed* plus the proposed action, and must agree the user asked for it with the stated
+details. It fails closed. Because it never reads documents or other people's messages,
+injected text has no path to it. The human approval click remains the final gate.
+
 **6. Citations are verified, not trusted.** Search results are numbered per run. The final
 answer must cite only numbers that exist, and must cite something if it used the docs. A
 failing answer gets one automatic retry with the reason; if it still fails, it is delivered
