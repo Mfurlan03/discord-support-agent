@@ -71,3 +71,45 @@ def render_citations(answer: str, sources: list[Hit], cited: list[int]) -> str:
         f"[{n}] <{sources[n - 1].url}>" if sources[n - 1].url else f"[{n}] {sources[n - 1].chunk_id}" for n in cited
     ]
     return answer.rstrip() + "\n\nSources:\n" + "\n".join(lines)
+
+
+# ---------------------------------------------------------------- action checker
+
+ACTION_CHECK_PROMPT = """You review actions an assistant wants to take for a Discord user.
+You see ONLY what the user typed (never documents or other people's messages), and the proposed action.
+
+Approve only if the user explicitly asked for this kind of action, AND every important detail
+(such as a reminder's time) was stated by the user or clearly follows from what they said.
+Mentioning a plan ("I'll read it tomorrow") is not a request. Asking for a human, reporting a
+security problem, or reporting abusive behaviour IS a request to escalate.
+
+Reply with JSON only: {"allowed": true|false, "reason": "<one short sentence>"}"""
+
+
+@dataclass
+class ActionVerdict:
+    allowed: bool
+    reason: str
+
+
+def check_action(llm, user_messages: list[str], tool_name: str, description: str, now_iso: str) -> ActionVerdict:
+    """Independent check that the user actually asked for a write/notify action.
+
+    The checker never sees retrieved documents or other people's messages, so text planted
+    there cannot influence it. Fails closed: any error or unparseable reply blocks the action.
+    """
+    import json
+
+    transcript = "\n".join(f"- {m}" for m in user_messages[-6:])
+    prompt = (
+        f"Current time: {now_iso} (UTC)\n\nWhat the user typed, oldest first:\n{transcript}\n\n"
+        f"Proposed action: {tool_name}: {description}"
+    )
+    try:
+        resp = llm.complete(ACTION_CHECK_PROMPT, [{"role": "user", "content": prompt}], [])
+        text = (resp.text or "").strip()
+        start, end = text.find("{"), text.rfind("}")
+        data = json.loads(text[start : end + 1])
+        return ActionVerdict(bool(data.get("allowed")), str(data.get("reason", ""))[:200])
+    except Exception as e:  # fail closed
+        return ActionVerdict(False, f"action check failed: {type(e).__name__}")

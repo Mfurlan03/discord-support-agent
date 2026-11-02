@@ -28,7 +28,7 @@ from pydantic import ValidationError
 
 from rag.retrieval import Hit
 
-from .guardrails import Budgets, check_citations, render_citations
+from .guardrails import Budgets, check_action, check_citations, render_citations
 from .llm import LLM, LLMError, ToolCall, assistant_message
 from .tools.base import Tier, Tool, ToolContext, ToolError, format_validation_error
 from .tracing import Tracer
@@ -43,7 +43,7 @@ How to work:
 - For versions, release dates, or when something changed, use lookup_release.
 - If the docs don't cover the question, say you couldn't find it in the docs and offer to pass it to the human helpers. Don't fill the gap from general knowledge (prices, plans, people, dates): that information may be wrong or out of date.
 - Use read_thread only when asked to summarize or catch up on the conversation.
-- Only call create_reminder when the user explicitly asks to be reminded ("remind me..."). Mentioning a plan ("I'll look at it tomorrow") is not a request.
+- Only call create_reminder when the user explicitly asks to be reminded ("remind me..."). Mentioning a plan ("I'll look at it tomorrow") is not a request. If they didn't say when, ask before setting it.
 - Call escalate_to_human when the user asks for a human, or when you can't help.
 - Both actions need the user's approval, and the system shows them Approve / Cancel buttons automatically. So when an action is warranted, call the tool directly. Never ask "shall I?" in text first.
 - Route security vulnerabilities and code-of-conduct problems to escalate_to_human instead of handling them yourself.
@@ -108,6 +108,7 @@ class Agent:
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
         system_prompt: str = SYSTEM_PROMPT,
         max_citation_retries: int = 1,
+        action_checker: LLM | None = None,
     ):
         self.llm = llm
         self.tools = {t.name: t for t in tools}
@@ -119,6 +120,7 @@ class Agent:
         self.clock = clock
         self.system_prompt = system_prompt
         self.max_citation_retries = max_citation_retries
+        self.action_checker = action_checker  # independent LLM call that vets write/notify actions
 
     # ------------------------------------------------------------------ public API
 
@@ -333,11 +335,39 @@ class Agent:
             state["sources"] = [asdict(s) for s in ctx.sources]
             return None
 
-        # write / notify: the model proposed it; the user decides.
+        # write / notify: first an independent check that the user asked for it...
+        desc = tool.describe(args, ctx)
+        if self.action_checker is not None:
+            user_msgs = [
+                m["content"]
+                for m in state["messages"]
+                if m["role"] == "user" and not str(m["content"]).startswith("[automatic check]")
+            ]
+            verdict = check_action(
+                self.action_checker, user_msgs, call.name, desc, self.clock().isoformat(timespec="minutes")
+            )
+            self.tracer.event(run_id, "action_check", tool=call.name, allowed=verdict.allowed, reason=verdict.reason)
+            if not verdict.allowed:
+                self.store.audit(
+                    run_id,
+                    user_id,
+                    call.name,
+                    tool.tier.value,
+                    call.arguments,
+                    "blocked",
+                    "not_run",
+                    detail=verdict.reason,
+                )
+                self._tool_message(
+                    state,
+                    call,
+                    f"Blocked: {verdict.reason} Do not retry. If details are missing, ask the user; otherwise just answer.",
+                )
+                return None
+        # ...then the user decides.
         state["sources"] = [asdict(s) for s in ctx.sources]
         state["paused_at"] = self.clock().isoformat()
         state["pending_calls"] = [c if isinstance(c, dict) else asdict(c) for c in state["pending_calls"]]
-        desc = tool.describe(args, ctx)
         persisted = dict(state)
         persisted["messages"] = [_ser_msg(m) for m in state["messages"]]
         self.store.save_run(run_id, thread_id, user_id, channel_id, "awaiting_approval", persisted)

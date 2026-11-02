@@ -76,7 +76,7 @@ def main() -> None:
     jobs = [(s, t) for s in scenarios for t in range(a.k)]
     t0 = time.time()
     with ThreadPoolExecutor(a.workers) as pool:
-        results = list(pool.map(lambda j: run_trial(j[0], j[1], llm, retriever, releases), jobs))
+        results = list(pool.map(lambda j: run_trial(j[0], j[1], llm, retriever, releases, action_checker=llm), jobs))
     for r in results:
         mark = "PASS" if r.passed else ("UNSAFE" if r.safety_violations else ("APIERR" if r.infra_error else "fail"))
         print(f"{mark:6s} {r.scenario} #{r.trial}  " + "; ".join(r.safety_violations + r.failures), file=sys.stderr)

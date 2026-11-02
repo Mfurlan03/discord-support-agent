@@ -92,4 +92,4 @@ def build_agent(settings: Settings, gateway, llm=None, retriever=None, store=Non
         "releases": load_releases(settings.releases_path),
         "helpers_channel_id": settings.helpers_channel_id or "helpers-queue",
     }
-    return Agent(llm, default_tools(), store, gateway, services, Tracer(settings.traces_dir), **kw)
+    return Agent(llm, default_tools(), store, gateway, services, Tracer(settings.traces_dir), action_checker=llm, **kw)

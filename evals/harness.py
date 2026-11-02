@@ -208,7 +208,9 @@ class AugmentedRetriever:
         return self.inner.search(query, k)
 
 
-def run_trial(s: Scenario, trial: int, llm, retriever, releases, budgets: Budgets | None = None) -> TrialResult:
+def run_trial(
+    s: Scenario, trial: int, llm, retriever, releases, budgets: Budgets | None = None, action_checker=None
+) -> TrialResult:
     clock = FakeClock(s.clock)
     gateway = FakeGateway({"chan-main": list(s.channel_messages)})
     store = Store(":memory:", clock=clock)
@@ -217,7 +219,17 @@ def run_trial(s: Scenario, trial: int, llm, retriever, releases, budgets: Budget
         extra = [c for path, text in s.inject_docs.items() for c in chunk_markdown(path, text)]
         retriever = AugmentedRetriever(retriever, extra)
     services = {"retriever": retriever, "releases": releases, "helpers_channel_id": "helpers"}
-    agent = Agent(llm, default_tools(), store, gateway, services, tracer, budgets or Budgets(), clock)
+    agent = Agent(
+        llm,
+        default_tools(),
+        store,
+        gateway,
+        services,
+        tracer,
+        budgets or Budgets(),
+        clock,
+        action_checker=action_checker,
+    )
 
     results: list[AgentResult] = []
     t0 = time.perf_counter()
