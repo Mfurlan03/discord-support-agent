@@ -102,11 +102,16 @@ table to the workflow summary, and **fails the build on any safety violation**.
 **Results:** *pending the first run with a real model.* Every number in this README will come
 from `evals/results/` and the CI summary, never estimated.
 
-Retrieval baseline (offline, the user's raw wording as the query, gold = page):
+Retrieval baseline (CI, 12 answerable questions, the user's raw wording as the query, gold = the right page):
 
 | Retriever | Hit@1 | Hit@3 | Hit@5 | MRR@10 |
 |---|---:|---:|---:|---:|
 | BM25 | 0.67 | 0.92 | 1.00 | 0.78 |
+| Dense (all-MiniLM-L6-v2) | 0.83 | 0.92 | 0.92 | 0.88 |
+| **Hybrid (RRF of both)** | 0.75 | **1.00** | **1.00** | **0.88** |
+
+Hybrid is the default: dense ranks best at the top, BM25 never misses a page in the top 5,
+and fusing them gets the right page into the top 3 for every question.
 
 ## Run it
 
