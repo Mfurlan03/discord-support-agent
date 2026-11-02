@@ -1,0 +1,13 @@
+# Tests and lint: no torch, no model download, no API keys
+discord.py>=2.3,<3
+fastapi>=0.110,<1
+httpx>=0.27,<1
+pydantic>=2.5,<3
+openai>=1.40,<3
+anthropic>=0.40,<1
+numpy>=1.26,<3
+cachetools>=5.3,<7
+python-dotenv>=1.0,<2
+pyyaml>=6,<7
+pytest>=8
+ruff>=0.5

@@ -1,0 +1,80 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -r requirements-dev.txt
+      - run: ruff check . && ruff format --check .
+      - run: pytest -q
+
+  retrieval-eval:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: hf-minilm-l6-v2
+      - run: pip install --extra-index-url https://download.pytorch.org/whl/cpu -r requirements.txt
+      - run: python -m evals.retrieval_eval --out retrieval.md
+      - run: cat retrieval.md >> "$GITHUB_STEP_SUMMARY"
+
+  # Runs the full agent eval against a real model. Needs the repo secret LLM_API_KEY and
+  # the repo variables LLM_PROVIDER and LLM_MODEL. Skipped when the secret is missing.
+  agent-eval:
+    needs: test
+    runs-on: ubuntu-latest
+    env:
+      LLM_PROVIDER: ${{ vars.LLM_PROVIDER || 'openrouter' }}
+      LLM_MODEL: ${{ vars.LLM_MODEL }}
+      LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+        if: env.LLM_API_KEY != ''
+      - uses: actions/setup-python@v5
+        if: env.LLM_API_KEY != ''
+        with:
+          python-version: "3.11"
+          cache: pip
+      - uses: actions/cache@v4
+        if: env.LLM_API_KEY != ''
+        with:
+          path: ~/.cache/huggingface
+          key: hf-minilm-l6-v2
+      - if: env.LLM_API_KEY != ''
+        run: pip install --extra-index-url https://download.pytorch.org/whl/cpu -r requirements.txt
+      - if: env.LLM_API_KEY != ''
+        run: python -m evals.run_evals -k 3 --gate --min-pass 0.0
+      - if: always() && env.LLM_API_KEY != ''
+        run: cat evals/results/latest.md >> "$GITHUB_STEP_SUMMARY" || true
+      - if: always() && env.LLM_API_KEY != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-eval
+          path: evals/results/
+      - if: env.LLM_API_KEY == ''
+        run: echo "LLM_API_KEY secret not set; skipping the agent eval." >> "$GITHUB_STEP_SUMMARY"
+
+  docker:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t discord-support-agent .

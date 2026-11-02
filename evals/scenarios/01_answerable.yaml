@@ -1,0 +1,130 @@
+# Questions the docs answer. Pass = correct key term + a verified citation to the right page.
+- id: cors-react-frontend
+  category: answerable
+  turns:
+    - user_says: My React app on localhost:3000 can't call my FastAPI backend, the browser blocks it. How do I fix that?
+  expect:
+    tools_called: [search_docs]
+    answer_contains_any: [CORSMiddleware]
+    cites_url_contains_any: [tutorial/cors]
+    verified: true
+    approvals: 0
+
+- id: query-param-default
+  category: answerable
+  turns:
+    - user_says: How do I give a query parameter a default value?
+  expect:
+    tools_called: [search_docs]
+    answer_contains_any: ["= 0", "=0", "default"]
+    cites_url_contains_any: [query-params]
+    verified: true
+
+- id: file-upload
+  category: answerable
+  turns:
+    - user_says: What's the right way to accept an uploaded image file in an endpoint?
+  expect:
+    tools_called: [search_docs]
+    answer_contains_any: [UploadFile]
+    cites_url_contains_any: [request-files, request-forms-and-files]
+    verified: true
+
+- id: file-upload-dependency
+  category: answerable
+  turns:
+    - user_says: I get an error about form data when receiving files. Do I need to install anything extra?
+  expect:
+    tools_called: [search_docs]
+    answer_contains_any: [python-multipart]
+    verified: true
+
+- id: testing-client
+  category: answerable
+  turns:
+    - user_says: How do I write tests for my FastAPI endpoints with pytest?
+  expect:
+    tools_called: [search_docs]
+    answer_contains_any: [TestClient]
+    cites_url_contains_any: [tutorial/testing]
+    verified: true
+
+- id: background-tasks
+  category: answerable
+  turns:
+    - user_says: I want to send an email after returning the response so the user doesn't wait. How?
+  expect:
+    tools_called: [search_docs]
+    answer_contains_any: [BackgroundTasks]
+    cites_url_contains_any: [background-tasks]
+    verified: true
+
+- id: oauth2-bearer
+  category: answerable
+  turns:
+    - user_says: How do I protect an endpoint so it needs a bearer token?
+  expect:
+    tools_called: [search_docs]
+    answer_contains_any: [OAuth2PasswordBearer]
+    cites_url_contains_any: [tutorial/security]
+    verified: true
+
+- id: http-exception-404
+  category: answerable
+  turns:
+    - user_says: How do I return a 404 with a custom message when an item doesn't exist?
+  expect:
+    tools_called: [search_docs]
+    answer_contains_any: [HTTPException]
+    cites_url_contains_any: [handling-errors]
+    verified: true
+
+- id: response-status-201
+  category: answerable
+  turns:
+    - user_says: How can my POST endpoint return 201 Created instead of 200?
+  expect:
+    tools_called: [search_docs]
+    answer_contains_any: [status_code]
+    cites_url_contains_any: [response-status-code]
+    verified: true
+
+- id: settings-env
+  category: answerable
+  turns:
+    - user_says: What's the recommended way to load settings from environment variables?
+  expect:
+    tools_called: [search_docs]
+    answer_contains_any: [pydantic-settings, BaseSettings]
+    cites_url_contains_any: [advanced/settings]
+    verified: true
+
+- id: static-files
+  category: answerable
+  turns:
+    - user_says: How do I serve a folder of static files like CSS and images?
+  expect:
+    tools_called: [search_docs]
+    answer_contains_any: [StaticFiles]
+    cites_url_contains_any: [static-files]
+    verified: true
+
+- id: startup-shutdown
+  category: answerable
+  turns:
+    - user_says: I need to load an ML model once when the app starts and release it on shutdown. What should I use?
+  expect:
+    tools_called: [search_docs]
+    answer_contains_any: [lifespan]
+    cites_url_contains_any: [advanced/events]
+    verified: true
+
+- id: workers-deploy
+  category: answerable
+  turns:
+    - user_says: How do I run multiple worker processes in production?
+  expect:
+    tools_called: [search_docs]
+    answer_contains_any: [--workers, workers]
+    cites_url_contains_any: [deployment/]
+    verified: true

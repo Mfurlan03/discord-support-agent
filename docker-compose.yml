@@ -1,0 +1,15 @@
+# cp .env.example .env  (fill in LLM_* and DISCORD_BOT_TOKEN), then: docker compose up --build
+services:
+  agent:
+    build: .
+    env_file: .env
+    environment:
+      DB_PATH: /data/agent.db
+      TRACES_DIR: /data/traces
+    ports:
+      - "8000:8000"   # trace viewer + HTTP API
+    volumes:
+      - agent-data:/data
+    restart: unless-stopped
+volumes:
+  agent-data:

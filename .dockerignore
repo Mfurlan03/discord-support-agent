@@ -1,0 +1,11 @@
+.env
+.env.*
+.git
+__pycache__/
+*.py[cod]
+.venv/
+*.db
+traces/
+evals/results/
+.pytest_cache/
+.ruff_cache/

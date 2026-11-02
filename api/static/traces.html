@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Support agent · traces</title>
+<style>
+  :root { --bg:#f7f7f5; --panel:#fff; --ink:#1d1d1b; --muted:#6b6b66; --line:#e3e2dd; --accent:#2f5bd3;
+          --ok:#1f8a4c; --warn:#b26b00; --bad:#b3261e; --mono: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:14px/1.45 system-ui, -apple-system, Segoe UI, sans-serif; color:var(--ink); background:var(--bg); }
+  header { padding:14px 20px; border-bottom:1px solid var(--line); background:var(--panel); display:flex; gap:12px; align-items:baseline; }
+  header h1 { font-size:16px; margin:0; } header span { color:var(--muted); }
+  main { display:grid; grid-template-columns: 340px 1fr; height: calc(100vh - 52px); }
+  aside { border-right:1px solid var(--line); overflow:auto; background:var(--panel); }
+  .chat { padding:12px; border-bottom:1px solid var(--line); }
+  .chat textarea { width:100%; min-height:64px; font:inherit; padding:8px; border:1px solid var(--line); border-radius:8px; resize:vertical; }
+  .chat .row { display:flex; gap:8px; margin-top:8px; }
+  button { font:inherit; border:1px solid var(--line); background:var(--panel); border-radius:8px; padding:6px 12px; cursor:pointer; }
+  button.primary { background:var(--accent); color:#fff; border-color:var(--accent); }
+  .reply { margin-top:10px; white-space:pre-wrap; font-size:13px; background:var(--bg); border-radius:8px; padding:8px; display:none; }
+  .run { padding:10px 12px; border-bottom:1px solid var(--line); cursor:pointer; }
+  .run:hover, .run.active { background:#eef2fd; }
+  .run .t { font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .run .m { color:var(--muted); font-size:12px; }
+  .badge { display:inline-block; padding:1px 7px; border-radius:99px; font-size:11px; border:1px solid currentColor; }
+  .answered { color:var(--ok); } .awaiting_approval, .run_paused { color:var(--warn); } .stopped, .error { color:var(--bad); }
+  section { overflow:auto; padding:20px 24px; }
+  .empty { color:var(--muted); margin-top:40px; text-align:center; }
+  .ev { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:10px 12px; margin:0 0 10px 0; position:relative; }
+  .ev .k { font-weight:600; } .ev .d { color:var(--muted); font-size:12px; float:right; }
+  .ev pre { font-family:var(--mono); font-size:12px; white-space:pre-wrap; margin:6px 0 0; background:var(--bg); padding:8px; border-radius:6px; max-height:260px; overflow:auto; }
+  .ev.llm_call { border-left:3px solid var(--accent); } .ev.tool_call { border-left:3px solid var(--ok); }
+  .ev.approval_requested, .ev.approval_resolved { border-left:3px solid var(--warn); }
+  .ev.error, .ev.budget_exceeded { border-left:3px solid var(--bad); }
+  table { border-collapse:collapse; width:100%; font-size:12px; background:var(--panel); }
+  td, th { border:1px solid var(--line); padding:4px 6px; text-align:left; vertical-align:top; }
+  h2 { font-size:14px; margin:20px 0 8px; }
+</style>
+</head>
+<body>
+<header><h1>Support agent</h1><span>every model call, tool call and approval, step by step</span></header>
+<main>
+  <aside>
+    <div class="chat">
+      <textarea id="msg" placeholder="Ask the agent something, e.g. How do I add CORS? Then remind me tomorrow at 9am ET to test it."></textarea>
+      <div class="row"><button class="primary" id="send">Send</button><button id="refresh">Refresh</button></div>
+      <div class="reply" id="reply"></div>
+    </div>
+    <div id="runs"></div>
+  </aside>
+  <section id="detail"><div class="empty">Pick a run on the left, or send a message.</div></section>
+</main>
+<script>
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? "").replace(/[&<>]/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+let current = null;
+
+async function loadRuns() {
+  const runs = await (await fetch("traces")).json();
+  $("#runs").innerHTML = runs.map(r => `
+    <div class="run ${r.run_id === current ? "active" : ""}" data-id="${r.run_id}">
+      <div class="t">${esc(r.user_text) || "(no text)"}</div>
+      <div class="m"><span class="badge ${esc(r.status)}">${esc(r.status)}</span> · ${r.steps} model call(s) · ${esc(r.ts.slice(11,19))}</div>
+    </div>`).join("");
+  document.querySelectorAll(".run").forEach(el => el.onclick = () => show(el.dataset.id));
+}
+
+function summary(e) {
+  switch (e.kind) {
+    case "run_start": return `user: ${e.text}`;
+    case "llm_call": return (e.tool_calls?.length ? "tool calls: " + JSON.stringify(e.tool_calls, null, 1) : "") + (e.text ? `\ntext: ${e.text}` : "");
+    case "tool_call": return `${e.tool} ${JSON.stringify(e.arguments ?? {})}\n→ ${e.outcome}${e.detail ? ": " + e.detail : ""}${e.data && Object.keys(e.data).length ? "\n" + JSON.stringify(e.data) : ""}`;
+    case "approval_requested": return `${e.description}`;
+    case "approval_resolved": return `${e.decision} by ${e.approver_id}`;
+    case "citation_check": return e.ok ? `ok, cited ${JSON.stringify(e.cited)}` : `failed: ${e.problem}`;
+    case "run_end": return `${e.status} · ${e.steps} steps · ${e.tool_calls} tool calls · ${e.tokens} tokens · ${e.seconds}s${e.verified === false ? " · UNVERIFIED citations" : ""}`;
+    default: return JSON.stringify(e, null, 1);
+  }
+}
+
+async function show(id) {
+  current = id; loadRuns();
+  const r = await fetch(`traces/${id}`);
+  if (!r.ok) return;
+  const { events, audit } = await r.json();
+  const t0 = events[0]?.t ?? 0;
+  $("#detail").innerHTML = `<h2>Run ${esc(id)}</h2>` + events.map(e => `
+    <div class="ev ${esc(e.kind)}"><span class="d">+${((e.t - t0) * 1000).toFixed(0)} ms${e.latency_ms != null ? ` · ${e.latency_ms} ms` : ""}${e.input_tokens != null ? ` · ${e.input_tokens}+${e.output_tokens} tok` : ""}</span>
+      <div class="k">${esc(e.kind.replace("_", " "))}</div><pre>${esc(summary(e))}</pre></div>`).join("") +
+    (audit.length ? `<h2>Audit log</h2><table><tr><th>tool</th><th>tier</th><th>args</th><th>decision</th><th>outcome</th></tr>` +
+      audit.map(a => `<tr><td>${esc(a.tool)}</td><td>${esc(a.tier)}</td><td>${esc(a.args)}</td><td>${esc(a.decision)}</td><td>${esc(a.outcome)}</td></tr>`).join("") + "</table>" : "");
+}
+
+function renderReply(res) {
+  const el = $("#reply"); el.style.display = "block";
+  el.innerHTML = esc(res.text);
+  if (res.status === "awaiting_approval") {
+    el.innerHTML += `<div class="row"><button class="primary" id="ok">Approve</button><button id="no">Cancel</button></div>`;
+    $("#ok").onclick = () => decide(res.run_id, true); $("#no").onclick = () => decide(res.run_id, false);
+  }
+  show(res.run_id);
+}
+
+async function decide(run_id, approved) {
+  const res = await (await fetch(`approvals/${run_id}`, { method: "POST", headers: {"content-type":"application/json"}, body: JSON.stringify({ approved }) })).json();
+  renderReply(res);
+}
+
+$("#send").onclick = async () => {
+  const text = $("#msg").value.trim(); if (!text) return;
+  $("#send").disabled = true; $("#reply").style.display = "block"; $("#reply").textContent = "Thinking…";
+  try {
+    const res = await (await fetch("chat", { method: "POST", headers: {"content-type":"application/json"}, body: JSON.stringify({ text }) })).json();
+    renderReply(res); $("#msg").value = "";
+  } finally { $("#send").disabled = false; }
+};
+$("#refresh").onclick = loadRuns;
+loadRuns();
+</script>
+</body>
+</html>

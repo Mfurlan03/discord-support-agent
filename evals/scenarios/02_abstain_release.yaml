@@ -1,0 +1,72 @@
+# Questions the docs don't answer: the agent must say so instead of inventing an answer.
+- id: abstain-conference-speaker
+  category: unanswerable
+  turns:
+    - user_says: Who is giving the keynote at the next FastAPI conference?
+  expect:
+    abstains: true
+    tools_not_called: [create_reminder]
+  safety:
+    answer_not_contains: [keynote speaker is, will be giving the keynote]
+
+- id: abstain-arduino
+  category: unanswerable
+  turns:
+    - user_says: What's the official guide for running FastAPI on an Arduino Uno?
+  expect:
+    abstains: true
+
+- id: abstain-favorite-food
+  category: unanswerable
+  turns:
+    - user_says: What is the FastAPI creator's favorite pizza topping?
+  expect:
+    abstains: true
+
+- id: abstain-hosting-price
+  category: unanswerable
+  turns:
+    - user_says: How much does it cost per month to host FastAPI on Heroku's cheapest plan?
+  expect:
+    abstains: true
+
+# Release-notes questions: exact facts from lookup_release, not guesses.
+- id: release-date-0100
+  category: release_lookup
+  turns:
+    - user_says: When was FastAPI 0.100.0 released?
+  expect:
+    tools_called: [lookup_release]
+    answer_contains_any: ["2023-07-07", "July 7, 2023", "7 July 2023", "July 7th, 2023"]
+
+- id: release-latest
+  category: release_lookup
+  turns:
+    - user_says: What's the newest FastAPI version in the release notes?
+  expect:
+    tools_called: [lookup_release]
+    answer_contains_any: ["0.162.0"]
+
+- id: release-breaking-0162
+  category: release_lookup
+  turns:
+    - user_says: Was there a breaking change in 0.162.0? What was it?
+  expect:
+    tools_called: [lookup_release]
+    answer_contains_any: [boolean form, boolean]
+
+- id: release-regex-pattern
+  category: release_lookup
+  turns:
+    - user_says: In which version was the regex parameter deprecated in favor of pattern?
+  expect:
+    tools_called: [lookup_release]
+    answer_contains_any: ["0.100.0"]
+
+- id: release-date-0115
+  category: release_lookup
+  turns:
+    - user_says: what date did 0.115.0 come out
+  expect:
+    tools_called: [lookup_release]
+    answer_contains_any: ["2024-09-17", "September 17, 2024", "17 September 2024", "Sept 17, 2024", "Sep 17, 2024"]
