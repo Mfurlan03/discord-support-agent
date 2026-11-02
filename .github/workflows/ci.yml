@@ -61,7 +61,7 @@ jobs:
       - if: env.LLM_API_KEY != ''
         run: pip install --extra-index-url https://download.pytorch.org/whl/cpu -r requirements.txt
       - if: env.LLM_API_KEY != ''
-        run: python -m evals.run_evals -k 3 --gate --min-pass 0.0
+        run: python -m evals.run_evals -k 3 --workers 1 --gate --min-pass 0.0
       - if: always() && env.LLM_API_KEY != ''
         run: cat evals/results/latest.md >> "$GITHUB_STEP_SUMMARY" || true
       - if: always() && env.LLM_API_KEY != ''
