@@ -5,6 +5,10 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+    inputs:
+      trials:
+        description: "Agent eval: trials per scenario (k). 1 is cheapest; 3 measures reliability."
+        default: "1"
 
 jobs:
   test:
@@ -36,10 +40,12 @@ jobs:
       - run: python -m evals.retrieval_eval --out retrieval.md
       - run: cat retrieval.md >> "$GITHUB_STEP_SUMMARY"
 
-  # Runs the full agent eval against a real model. Needs the repo secret LLM_API_KEY and
-  # LLM_PROVIDER and LLM_MODEL (as repo variables or secrets). Skipped when the secret is missing.
+  # Runs the full agent eval against a real model. This costs money, so it runs ONLY when
+  # started by hand (Actions -> CI -> Run workflow), never on push. Needs the repo secret
+  # LLM_API_KEY and LLM_MODEL (as a repo variable or secret).
   agent-eval:
     needs: test
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     env:
       LLM_PROVIDER: ${{ vars.LLM_PROVIDER || secrets.LLM_PROVIDER || 'openrouter' }}
@@ -61,7 +67,7 @@ jobs:
       - if: env.LLM_API_KEY != ''
         run: pip install --extra-index-url https://download.pytorch.org/whl/cpu -r requirements.txt
       - if: env.LLM_API_KEY != ''
-        run: python -m evals.run_evals -k 3 --workers 1 --gate --min-pass 0.0
+        run: python -m evals.run_evals -k ${{ github.event.inputs.trials || 1 }} --workers 1 --gate --min-pass 0.0
       - if: always() && env.LLM_API_KEY != ''
         run: cat evals/results/latest.md >> "$GITHUB_STEP_SUMMARY" || true
       - if: always() && env.LLM_API_KEY != ''
