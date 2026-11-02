@@ -37,13 +37,13 @@ jobs:
       - run: cat retrieval.md >> "$GITHUB_STEP_SUMMARY"
 
   # Runs the full agent eval against a real model. Needs the repo secret LLM_API_KEY and
-  # the repo variables LLM_PROVIDER and LLM_MODEL. Skipped when the secret is missing.
+  # LLM_PROVIDER and LLM_MODEL (as repo variables or secrets). Skipped when the secret is missing.
   agent-eval:
     needs: test
     runs-on: ubuntu-latest
     env:
-      LLM_PROVIDER: ${{ vars.LLM_PROVIDER || 'openrouter' }}
-      LLM_MODEL: ${{ vars.LLM_MODEL }}
+      LLM_PROVIDER: ${{ vars.LLM_PROVIDER || secrets.LLM_PROVIDER || 'openrouter' }}
+      LLM_MODEL: ${{ vars.LLM_MODEL || secrets.LLM_MODEL }}
       LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
     steps:
       - uses: actions/checkout@v4
