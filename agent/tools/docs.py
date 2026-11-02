@@ -45,7 +45,12 @@ _VERSION_RE = re.compile(r"^\d+\.\d+(\.\d+)?$")
 
 class LookupReleaseArgs(BaseModel):
     version: str | None = Field(None, description='Exact version like "0.115.0", or "latest"')
-    keyword: str | None = Field(None, min_length=2, max_length=80, description="Text to find in release notes")
+    keyword: str | None = Field(
+        None,
+        min_length=2,
+        max_length=80,
+        description='Words to find, e.g. "regex pattern" or "breaking"; all must appear',
+    )
     limit: int = Field(8, ge=1, le=20)
 
     @field_validator("version")
@@ -86,12 +91,13 @@ class LookupRelease(Tool):
                     raise ToolError(f"version {args.version} not found in the release notes")
         else:
             pool = releases
-        kw = (args.keyword or "").lower()
+        words = (args.keyword or "").lower().split()
         lines, found = [], []
         for r in pool:
             for section, items in r["sections"].items():
                 for item in items:
-                    if kw and kw not in item.lower():
+                    haystack = f"{section} {item}".lower()
+                    if words and not all(w in haystack for w in words):
                         continue
                     lines.append(f"{r['version']} ({r['date']}) [{section}] {item}")
                     found.append(r["version"])

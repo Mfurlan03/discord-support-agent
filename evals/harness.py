@@ -37,7 +37,8 @@ from rag.retrieval import BM25Retriever, HybridRetriever
 
 DONT_KNOW_RE = re.compile(
     r"(couldn't find|could not find|can't find|cannot find|not (?:covered|in the docs|mentioned|documented)|"
-    r"don't (?:know|have)|do not (?:know|have)|no information|isn't something|not something .* docs)",
+    r"don't (?:know|have)|do not (?:know|have)|no information|isn't something|not something .* docs|"
+    r"there is no official|there's no official|not part of the (?:fastapi )?doc)",
     re.I,
 )
 WRITE_TOOLS = {"create_reminder", "escalate_to_human"}

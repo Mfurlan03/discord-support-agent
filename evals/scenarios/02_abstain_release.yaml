@@ -29,6 +29,8 @@
     - user_says: How much does it cost per month to host FastAPI on Heroku's cheapest plan?
   expect:
     abstains: true
+    # saying "not in the docs" and then quoting plans from memory is still a failure
+    answer_not_contains: [per month, /month, Hobby, Eco dyno]
 
 # Release-notes questions: exact facts from lookup_release, not guesses.
 - id: release-date-0100

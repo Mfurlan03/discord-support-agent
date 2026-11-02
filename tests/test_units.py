@@ -154,3 +154,24 @@ def test_with_retries_does_not_retry_client_errors():
     with pytest.raises(Bad):
         with_retries(fn, (Bad,), _status_transient, sleep=lambda s: None)
     assert len(calls) == 1
+
+
+def test_lookup_release_matches_all_words_and_section_names():
+    from agent.config import ROOT, load_releases
+    from agent.tools.base import ToolContext
+    from agent.tools.docs import LookupRelease, LookupReleaseArgs
+
+    ctx = ToolContext(
+        "u",
+        "t",
+        "c",
+        now=None,
+        store=None,
+        gateway=None,
+        services={"releases": load_releases(str(ROOT / "data" / "releases.json"))},
+    )
+    tool = LookupRelease()
+    breaking = tool.run(LookupReleaseArgs(version="0.162.0", keyword="breaking"), ctx)
+    assert "boolean form fields" in breaking.content
+    regex = tool.run(LookupReleaseArgs(keyword="regex deprecated pattern"), ctx)
+    assert "0.100.0" in regex.data["versions"]
