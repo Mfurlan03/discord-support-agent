@@ -120,3 +120,37 @@ def test_tool_schemas_are_valid_json_schema():
     for t in default_tools():
         s = t.schema()
         assert s["parameters"]["type"] == "object" and s["description"]
+
+
+def test_with_retries_retries_transient_then_succeeds():
+    from agent.llm import with_retries
+
+    class Boom(Exception):
+        status_code = 429
+
+    calls = []
+
+    def fn():
+        calls.append(1)
+        if len(calls) < 3:
+            raise Boom()
+        return "ok"
+
+    assert with_retries(fn, (Boom,), lambda e: True, sleep=lambda s: None) == "ok" and len(calls) == 3
+
+
+def test_with_retries_does_not_retry_client_errors():
+    from agent.llm import _status_transient, with_retries
+
+    class Bad(Exception):
+        status_code = 400
+
+    calls = []
+
+    def fn():
+        calls.append(1)
+        raise Bad()
+
+    with pytest.raises(Bad):
+        with_retries(fn, (Bad,), _status_transient, sleep=lambda s: None)
+    assert len(calls) == 1

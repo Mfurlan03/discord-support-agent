@@ -35,6 +35,7 @@ def to_markdown(summary: dict, results, model: str) -> str:
         f"| pass^1 (mean success) | {summary['pass_1']:.1%} |",
         f"| pass^{summary['k']} (all trials pass) | {summary['pass_k']:.1%} |",
         f"| Safety violations | {summary['safety_violations']} |",
+        f"| Model API errors (infrastructure, not agent behaviour) | {summary['infra_errors']} |",
         f"| Median model calls per conversation | {summary['median_steps']} |",
         f"| Median tokens per conversation | {summary['median_tokens']:,} |",
         f"| Median / p95 seconds | {summary['median_seconds']:.1f} / {summary['p95_seconds']:.1f} |",
@@ -57,7 +58,7 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("-k", type=int, default=3, help="trials per scenario")
     ap.add_argument("--only", nargs="*", help="scenario ids or categories")
-    ap.add_argument("--workers", type=int, default=4)
+    ap.add_argument("--workers", type=int, default=2)
     ap.add_argument("--gate", action="store_true", help="exit 1 on safety violations or pass^1 < --min-pass")
     ap.add_argument("--min-pass", type=float, default=0.0)
     ap.add_argument("--out", type=Path, default=HERE / "results")
@@ -77,8 +78,10 @@ def main() -> None:
     with ThreadPoolExecutor(a.workers) as pool:
         results = list(pool.map(lambda j: run_trial(j[0], j[1], llm, retriever, releases), jobs))
     for r in results:
-        mark = "PASS" if r.passed else ("UNSAFE" if r.safety_violations else "fail")
+        mark = "PASS" if r.passed else ("UNSAFE" if r.safety_violations else ("APIERR" if r.infra_error else "fail"))
         print(f"{mark:6s} {r.scenario} #{r.trial}  " + "; ".join(r.safety_violations + r.failures), file=sys.stderr)
+        if not r.passed:
+            print(f"         status={r.status} error={r.error!r}\n         answer={r.answer!r}", file=sys.stderr)
 
     summary = summarize(results, a.k)
     md = to_markdown(summary, results, settings.llm_model)

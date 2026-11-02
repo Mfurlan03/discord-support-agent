@@ -109,6 +109,13 @@ class TrialResult:
     tokens: int
     seconds: float
     status: str
+    answer: str = ""
+    error: str = ""
+
+    @property
+    def infra_error(self) -> bool:
+        """The model API failed; the agent never got a fair turn."""
+        return self.status == "error"
 
 
 # ------------------------------------------------------------------ checks
@@ -229,6 +236,7 @@ def run_trial(s: Scenario, trial: int, llm, retriever, releases, budgets: Budget
     failures = run_checks(s.expect, tr)
     violations = [f"[safety] {f}" for f in run_checks(s.safety, tr)] + universal_safety(tr)
     ends = [e for e in events if e["kind"] == "run_end"]
+    errors = [f"{e.get('kind_detail')}: {e.get('message', '')}" for e in events if e["kind"] == "error"]
     return TrialResult(
         s.id,
         s.category,
@@ -240,6 +248,8 @@ def run_trial(s: Scenario, trial: int, llm, retriever, releases, budgets: Budget
         sum(e.get("tokens", 0) for e in ends),
         seconds,
         tr.final.status,
+        (tr.final.text or "")[:300],
+        "; ".join(errors)[:300],
     )
 
 
@@ -262,6 +272,7 @@ def summarize(results: list[TrialResult], k: int) -> dict[str, Any]:
         "pass_1": pct([r.passed for r in results]),
         "pass_k": pct([all(t.passed for t in ts) for ts in by_s.values()]),
         "safety_violations": sum(len(r.safety_violations) for r in results),
+        "infra_errors": sum(r.infra_error for r in results),
         "by_category": {
             c: {"pass_1": pct([r.passed for r in rs]), "trials": len(rs)} for c, rs in sorted(cats.items())
         },

@@ -34,7 +34,29 @@ class LLMResponse:
 
 
 class LLMError(RuntimeError):
-    """Provider-side failure (quota, rate limit, network). Not retried by the loop."""
+    """Provider-side failure (quota, rate limit, network) that survived retries."""
+
+
+RETRY_DELAYS = (2.0, 5.0, 12.0)  # seconds between attempts on transient errors
+
+
+def with_retries(fn, transient: tuple[type[BaseException], ...], is_transient=lambda e: True, sleep=None):
+    """Call fn(), retrying transient provider errors (429, 5xx, timeouts) with backoff."""
+    import time
+
+    sleep = sleep or time.sleep
+    for attempt in range(len(RETRY_DELAYS) + 1):
+        try:
+            return fn()
+        except transient as e:
+            if attempt == len(RETRY_DELAYS) or not is_transient(e):
+                raise
+            sleep(RETRY_DELAYS[attempt])
+
+
+def _status_transient(e) -> bool:
+    code = getattr(e, "status_code", None)
+    return code is None or code == 429 or code >= 500
 
 
 class LLM(Protocol):
@@ -88,16 +110,21 @@ class OpenAICompatLLM:
     def complete(self, system: str, messages: list[dict], tools: list[dict]) -> LLMResponse:
         from openai import APIConnectionError, APIStatusError
 
-        try:
-            resp = self.client.chat.completions.create(
+        def go():
+            return self.client.chat.completions.create(
                 model=self.model,
                 messages=self.to_openai(system, messages),
                 tools=[{"type": "function", "function": t} for t in tools] or None,
                 temperature=0.2,
                 max_tokens=self.max_tokens,
             )
+
+        try:
+            resp = with_retries(go, (APIStatusError, APIConnectionError), _status_transient)
         except (APIStatusError, APIConnectionError) as e:
             raise LLMError(str(e)[:300]) from e
+        if not resp.choices:  # some gateways return 200 with an error body and no choices
+            raise LLMError(f"empty response: {str(getattr(resp, 'error', ''))[:200]}")
         msg = resp.choices[0].message
         calls = []
         for c in msg.tool_calls or []:
