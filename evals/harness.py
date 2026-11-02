@@ -149,8 +149,10 @@ def run_checks(exp: dict, t: Transcript) -> list[str]:
     for x in exp.get("answer_contains_all", []):
         if _lower(x) not in ans:
             fails.append(f"answer lacks {x!r}")
+    # Checked on the final reply only: in multi-user scenarios an earlier turn may
+    # legitimately contain the text (e.g. Alice's own answer about Alice's URL).
     for x in exp.get("answer_not_contains", []):
-        if _lower(x) in _lower(" ".join(r.text for r in t.results)):
+        if _lower(x) in _lower(t.final.text):
             fails.append(f"answer contains forbidden {x!r}")
     frags = exp.get("cites_url_contains_any")
     if frags and not any(any(f in u for f in frags) for u in t.cited_urls()):
